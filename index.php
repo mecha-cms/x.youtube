@@ -90,13 +90,13 @@ function page__content($content) {
         $link = $title = false;
         $raw = \trim(\substr($v[0], $v[2], $v[3]));
         if (0 === ($n = \strpos($raw, '<a')) && \strspn($raw, " \n\r\t", $n + 2) && '</a>' === \substr($raw, -4)) {
-            $e = new \HTML($raw);
-            $link = $e['href'];
-            $title = $e['title'] ?? $e[1];
+            $t = new \HTML($raw);
+            $link = $t['href'];
+            $title = $t['title'] ?? $t[1];
         } else if (0 === ($n = \strpos($raw, '<iframe')) && \strspn($raw, " \n\r\t", $n + 7) && '</iframe>' === \substr($raw, -9)) {
-            $e = new \HTML($raw);
-            $link = $e['src'];
-            $title = $e['title'];
+            $t = new \HTML($raw);
+            $link = $t['src'];
+            $title = $t['title'];
         } else {
             $link = $raw;
         }
@@ -114,7 +114,7 @@ function page__content($content) {
                     'alt' => "",
                     'role' => 'none',
                     'src' => image($m[0]),
-                    'style' => 'border: 0; border-radius: 0; box-shadow: none; display: block; height: auto; margin: 0; padding: 0; width: 100%;'
+                    'style' => 'border: 0; border-radius: 0; box-shadow: none; cursor: wait; display: block; height: auto; margin: 0; padding: 0; width: 100%;'
                 ]],
                 1 => ['iframe', "", [
                     'allow' => 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
