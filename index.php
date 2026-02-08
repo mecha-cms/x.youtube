@@ -1,156 +1,136 @@
 <?php namespace x\youtube;
 
-function from(string $id, string $end, array $m = []) {
-    $p = new \HTML('<p' . ($m[1] ?? "") . '>');
-    $parts = \array_replace(["", ""], \explode('#', $end, 2));
-    return new \HTML(\Hook::fire('y.youtube', [[
-        'hash' => "" !== $parts[1] ? $parts[1] : null,
-        'id' => $id,
-        'query' => "" !== $parts[0] ? \From::query($parts[0]) : [],
-        0 => $p[0],
-        1 => [
-            '<' => $m[2] ?? "",
-            'embed' => ['iframe', "", [
-                'allow' => 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
-                'allowfullscreen' => true,
-                'frameborder' => '0',
-                'src' => 'https://www.youtube.com/embed/' . $id . $end,
-                'style' => 'border: 0; display: block; height: 100%; left: 0; margin: 0; overflow: hidden; padding: 0; position: absolute; top: 0; width: 100%;',
-                'title' => $m['title'] ?? \i('YouTube Video Player')
-            ]],
-            '>' => $m[4] ?? ""
-        ],
-        2 => \array_replace([
-            'style' => 'display: block; height: 0; margin-left: 0; margin-right: 0; overflow: hidden; padding: 0 0 56.25%; position: relative;'
-        ], (array) ($p[2] ?? []))
-    ]]), true);
+// Get best image resolution
+function image(string $id) {
+    $u = 'https://img.youtube.com/vi/' . $id;
+    if (\is_file($q = \LOT . \D . 'cache' . \D . 'x.youtube' . \D . $id)) {
+        return $u . '/' . (\file_get_contents($q) ?: '0') . '.jpg';
+    }
+    if (!\extension_loaded('curl')) {
+        return $u . '/0.jpg';
+    }
+    foreach (['maxresdefault', 'sddefault', 'hqdefault', 'mqdefault', 'default'] as $v) {
+        $c = \curl_init($u . '/' . $v . '.jpg');
+        \curl_setopt_array($c, [
+            \CURLOPT_FOLLOWLOCATION => true,
+            \CURLOPT_NOBODY => true,
+            \CURLOPT_RETURNTRANSFER => true,
+            \CURLOPT_TIMEOUT => 3
+        ]);
+        \curl_exec($c);
+        $status = \curl_getinfo($c, \CURLINFO_HTTP_CODE);
+        \curl_close($c);
+        if (200 === $status) {
+            \save($q, $v, 0600);
+            return $u . '/' . $v . '.jpg';
+        }
+    }
+    return $u . '/0.jpg';
+}
+
+function m(string $v) {
+    if ("" === $v || (0 !== \strpos($v, 'http://') && 0 !== \strpos($v, 'https://')) || \strcspn($v, " \n\r\t") !== \strlen($v)) {
+        return;
+    }
+    $v = \trim(\explode('://', $v, 2)[1]);
+    // `www.…`
+    if (0 === \strpos($v, 'www.')) {
+        $v = \substr($v, 4);
+    }
+    // `youtu.be/…`
+    if (0 === \strpos($v, 'youtu.be/')) {
+        $v = \substr($v, 9);
+    // `youtube.com/…`
+    } else if (0 === \strpos($v, 'youtube.com/')) {
+        $v = \substr($v, 12);
+    } else {
+        return;
+    }
+    if ("" !== ($z = \strstr($v, '?') ?: \strstr($v, '&') ?: \strstr($v, '#') ?: "")) {
+        $v = \substr($v, 0, -\strlen($z));
+    }
+    // `embed/{id}` or `v/{id}`
+    if (0 === \strpos($v, 'embed/') || 0 === \strpos($v, 'v/')) {
+        return [\substr(\strstr($v, '/'), 1), $z];
+    }
+    // `watch?v={id}`
+    if (0 === \strpos($v . $z, 'watch?')) {
+        if ($query = \strstr($z, '#', true)) {
+            $hash = \substr($z, \strlen($query));
+        }
+        \parse_str(\substr($query ?: $z, 1), $q);
+        $id = $q['v'] ?? false;
+        unset($q['v']);
+        $q = \http_build_query($q);
+        return [$id, ($q ? '?' . $q : "") . ($hash ?? "")];
+    }
+    // `{id}`
+    return [$v, $z];
 }
 
 function page__content($content) {
-    if (!$content || false === \stripos($content, '</p>')) {
+    if (!$content || false === \strpos($content, '</p>')) {
         return $content;
     }
-    // Skip parsing process if we are in these HTML element(s)
-    $parts = (array) \preg_split('/(<!--[\s\S]*?-->|' . \implode('|', (static function ($parts) {
-        foreach ($parts as $k => &$v) {
-            $v = '<' . \x($k) . '(?:\s[\p{L}\p{N}_:-]+(?:=(?:"[^"]*"|\'[^\']*\'|[^\/>]*))?)*>[\s\S]*?<\/' . \x($k) . '>';
-        }
-        unset($v);
-        return $parts;
-    })([
-        'pre' => 1,
-        'code' => 1, // Must come after `pre`
-        'kbd' => 1,
-        'math' => 1,
-        'script' => 1,
-        'style' => 1,
-        'textarea' => 1,
-        'p' => 1 // Must come last
-    ])) . ')/', $content, -1, \PREG_SPLIT_NO_EMPTY | \PREG_SPLIT_DELIM_CAPTURE);
-    $content = "";
-    foreach ($parts as $part) {
-        if ($part && '<' === $part[0] && '>' === \substr($part, -1)) {
-            if ('</p>' === \strtolower(\substr($part, -4))) {
-                $content .= \preg_replace_callback('/<p(\s(?:"[^"]*"|\'[^\']*\'|[^\/>])*)?>(\s*)(<a\s(?:"[^"]*"|\'[^\']*\'|[^\/>])*>[\s\S]*?<\/a>|<iframe\s(?:"[^"]*"|\'[^\']*\'|[^\/>])*>[\s\S]*?<\/iframe>|https?:\/\/(?:www\.)?(?:youtu\.be|youtube\.com)\/\S+)(\s*)<\/p>/i', static function ($m) {
-                    if ('</a>' === \strtolower(\substr($v = $m[3], -4)) && false !== \stripos($v, 'href=')) {
-                        $a = new \HTML($v);
-                        if (!$href = $a['href']) {
-                            return $m[0];
-                        }
-                        $default = \htmlspecialchars_decode(\trim(\strip_tags((string) $a[1])));
-                        $m['title'] = $a['title'] ?? ($default !== $href ? $default : null);
-                        $m[3] = $v = $href;
-                    } else if ('</iframe>' === \strtolower(\substr($v = $m[3], -9)) && false !== \stripos($v, 'src=')) {
-                        $iframe = new \HTML($v);
-                        if (!$src = $iframe['src']) {
-                            return $m[0];
-                        }
-                        $default = \htmlspecialchars_decode(\trim(\strip_tags((string) $iframe[1])));
-                        $m['title'] = $iframe['title'] ?? ($default !== $src ? $default : null);
-                        $m[3] = $v = $src;
-                    }
-                    if (0 === \strpos($v, 'http://') || 0 === \strpos($v, 'https://')) {
-                        // `https://www.youtube.com/embed/:id`
-                        if (false !== \strpos($v, '/embed/') && \preg_match('/\/embed\/([^\/?&#]+)([?&#].*)?$/', $v, $mm)) {
-                            return (string) \x\youtube\from($mm[1], $mm[2] ?? "", $m);
-                        }
-                        // `https://www.youtube.com/v/:id`
-                        if (false !== \strpos($v, '/v/') && \preg_match('/\/v\/([^\/?&#]+)([?&#].*)?$/', $v, $mm)) {
-                            return (string) \x\youtube\from($mm[1], $mm[2] ?? "", $m);
-                        }
-                        // `https://www.youtube.com/watch?v=:id`
-                        if (false !== \strpos($v, '/watch') && \preg_match('/\/watch\?([^#]+)([#].*)?$/', $v, $mm)) {
-                            \parse_str($mm[1], $q);
-                            if (isset($q['v'])) {
-                                $id = $q['v'];
-                                unset($q['v']);
-                                return (string) \x\youtube\from($id, $q ? '?' . \http_build_query($q) : "", $m);
-                            }
-                            return $m[0];
-                        }
-                        // `https://youtu.be/:id`
-                        if ((false !== \strpos($v, '/youtu.be/') || false !== \strpos($v, '.youtu.be/')) && \preg_match('/[\/.]youtu\.be\/([^\/?&#]+)([?&#].*)?$/', $v, $mm)) {
-                            return (string) \x\youtube\from($mm[1], $mm[2] ?? "", $m);
-                        }
-                    }
-                    return $m[0];
-                }, $part);
-                continue;
-            }
-            $content .= $part; // Is a HTML tag other than `<p>` or comment, skip!
+    $r = "";
+    foreach (\apart($content, [
+        'pre',
+        'code', // Must come after `pre`
+        'kbd',
+        'math',
+        'script',
+        'style',
+        'textarea',
+        'p' // Must come last
+    ]) as $v) {
+        if ('</p>' !== \substr($v[0], -4)) {
+            $r .= $v[0];
             continue;
         }
-        $content .= $part;
-    }
-    return "" !== $content ? $content : null;
-}
-
-function page__image($image) {
-    // Skip if `image` data has been set!
-    if ($image) {
-        return $image;
-    }
-    // Get YouTube link from `content` data
-    if ($content = $this->content) {
-        if (false !== \strpos($content, '<iframe ') && \preg_match('/<iframe(\s[^>]+)>/', $content, $m)) {
-            if (false !== \strpos($m[1], ' src=')) {
-                $link = \htmlspecialchars_decode(\trim(\strstr(\substr(\strstr($m[1], ' src='), 5) . ' ', ' ', true), '\'"'));
-                // Get YouTube video image from link
-                if (false !== \strpos($link, 'youtube.com/embed/') && \preg_match('/\/embed\/([^\/?&#]+)$/', $link, $mm)) {
-                    return 'https://img.youtube.com/vi/' . $mm[1] . '/0.jpg';
-                }
-            }
+        $link = $title = false;
+        $raw = \trim(\substr($v[0], $v[2], $v[3]));
+        if (0 === ($n = \strpos($raw, '<a')) && \strspn($raw, " \n\r\t", $n + 2) && '</a>' === \substr($raw, -4)) {
+            $e = new \HTML($raw);
+            $link = $e['href'];
+            $title = $e['title'] ?? $e[1];
+        } else if (0 === ($n = \strpos($raw, '<iframe')) && \strspn($raw, " \n\r\t", $n + 7) && '</iframe>' === \substr($raw, -9)) {
+            $e = new \HTML($raw);
+            $link = $e['src'];
+            $title = $e['title'];
+        } else {
+            $link = $raw;
         }
-    }
-    return null;
-}
-
-function page__images($images) {
-    $images = (array) ($images ?? []);
-    // Get YouTube link(s) from `content` data
-    if ($content = $this->content) {
-        if (false !== \strpos($content, '<iframe ') && \preg_match_all('/<iframe(\s[^>]+)>/', $content, $m)) {
-            foreach ($m[1] as $v) {
-                if (false !== \strpos($v, ' src=')) {
-                    $link = \htmlspecialchars_decode(\trim(\strstr(\substr(\strstr($v, ' src='), 5) . ' ', ' ', true), '\'"'));
-                    // Get YouTube video image from link
-                    if (false !== \strpos($link, 'youtube.com/embed/') && \preg_match('/\/embed\/([^\/?&#]+)$/', $link, $mm)) {
-                        // Merge with the current `images` data
-                        $images[] = 'https://img.youtube.com/vi/' . $mm[1] . '/0.jpg';
-                    }
-                }
-            }
+        if (!$m = m($link)) {
+            $r .= $v[0];
+            continue;
         }
+        $p = new \HTML(\substr($v[0], 0, $v[2]));
+        $r .= new \HTML(\Hook::fire('y.youtube', [[
+            'etc' => $m[1],
+            'id' => $m[0],
+            0 => $p[0],
+            1 => [
+                0 => ['img', false, [
+                    'alt' => "",
+                    'role' => 'none',
+                    'src' => image($m[0]),
+                    'style' => 'border: 0; border-radius: 0; box-shadow: none; display: block; height: auto; margin: 0; padding: 0; width: 100%;'
+                ]],
+                1 => ['iframe', "", [
+                    'allow' => 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+                    'allowfullscreen' => true,
+                    'frameborder' => '0',
+                    'src' => 'https://www.youtube.com/embed/' . $m[0] . $m[1],
+                    'style' => 'border: 0; display: block; height: 100%; left: 0; margin: 0; overflow: hidden; padding: 0; position: absolute; top: 0; width: 100%;',
+                    'title' => $title ?: \i('YouTube Video Player')
+                ]]
+            ],
+            2 => \array_replace([
+                'style' => 'display: block; margin-left: 0; margin-right: 0; overflow: hidden; padding: 0; position: relative;'
+            ], (array) ($p[2] ?? []))
+        ]]), true);
     }
-    return \array_unique($images);
+    return "" !== $r ? $r : null;
 }
 
 \Hook::set('page.content', __NAMESPACE__ . "\\page__content", 2.1);
-if (isset($state->x->image)) {
-    \Hook::set('page.image', __NAMESPACE__ . "\\page__image", 2.2);
-    \Hook::set('page.images', __NAMESPACE__ . "\\page__images", 2.2);
-}
-
-if (\defined("\\TEST") && 'x.youtube' === \TEST && \is_file($test = __DIR__ . \D . 'test.php')) {
-    require $test;
-}

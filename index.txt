@@ -11,10 +11,10 @@ version: 2.0.0
 This extension converts these supported [YouTube](https://www.youtube.com) links in the page content into YouTube video
 players:
 
- - `https://www.youtube.com/embed/:id`
- - `https://www.youtube.com/v/:id`
- - `https://www.youtube.com/watch?v=:id`
- - `https://youtu.be/:id`
+ - `https://www.youtube.com/embed/{id}`
+ - `https://www.youtube.com/v/{id}`
+ - `https://www.youtube.com/watch?v={id}`
+ - `https://youtu.be/{id}`
 
 Links must be written on one line as the paragraph content. The `www.` part is always optional:
 
