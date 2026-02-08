@@ -89,11 +89,11 @@ function page__content($content) {
         }
         $link = $title = false;
         $raw = \trim(\substr($v[0], $v[2], $v[3]));
-        if (0 === ($n = \strpos($raw, '<a')) && \strspn($raw, " \n\r\t", $n + 2) && '</a>' === \substr($raw, -4)) {
+        if (0 === \strpos($raw, '<a') && \strspn($raw, " \n\r\t", 2) && '</a>' === \substr($raw, -4) && false === \strpos(\substr($raw, 0, -4), '</a>')) {
             $t = new \HTML($raw);
             $link = $t['href'];
             $title = $t['title'] ?? $t[1];
-        } else if (0 === ($n = \strpos($raw, '<iframe')) && \strspn($raw, " \n\r\t", $n + 7) && '</iframe>' === \substr($raw, -9)) {
+        } else if (0 === \strpos($raw, '<iframe') && \strspn($raw, " \n\r\t", 7) && '</iframe>' === \substr($raw, -9) && false === \strpos(\substr($raw, 0, -9), '</iframe>')) {
             $t = new \HTML($raw);
             $link = $t['src'];
             $title = $t['title'];
