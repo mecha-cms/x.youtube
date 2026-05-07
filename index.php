@@ -6,7 +6,7 @@ function image(string $id) {
     if (\is_file($q = \LOT . \D . 'cache' . \D . 'x.youtube' . \D . $id)) {
         return $u . '/' . (\file_get_contents($q) ?: '0') . '.jpg';
     }
-    if (!\extension_loaded('curl')) {
+    if (!\function_exists("\\curl_init")) {
         return $u . '/0.jpg';
     }
     foreach (['maxresdefault', 'sddefault', 'hqdefault', 'mqdefault', 'default'] as $v) {
